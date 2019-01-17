@@ -1,0 +1,76 @@
+---
+title: 'Peer Graded Assignment: PML'
+author: "Jerry Odia"
+date: "January 16, 2019"
+output: html_document
+---
+Overview
+The document is the final report of the Peer Assessment project from Coursera's course Practical Machine Learning in data science specializtion. 
+The goal of the project is to predict the manner in which 6 participants performed some exercise as described below. This is the "classe" variable in the training set. The machine learning algorithm described here is applied to the 20 test cases available in the test data and the predictions are submitted in appropriate format to the Course Project Prediction Quiz for automated grading.
+
+Environment Preparation
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+set.seed(3345)
+```
+Data download
+```{r}
+UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(UrlTrain))
+testing  <- read.csv(url(UrlTest))
+
+inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+```
+```{r}
+dim(TrainSet)
+dim(TestSet)
+```
+```{r}
+# remove variables that are mostly NA
+AllNA    <- sapply(TrainSet, function(x) mean(is.na(x))) > 0.95
+TrainSet <- TrainSet[, AllNA==FALSE]
+TestSet  <- TestSet[, AllNA==FALSE]
+dim(TrainSet)
+```
+```{r}
+# remove Near Zero variables
+NZV <- nearZeroVar(TrainSet)
+TrainSet <- TrainSet[, -NZV]
+TestSet  <- TestSet[, -NZV]
+dim(TrainSet)
+```
+Prediction Modelling
+```{r}
+# model fit
+set.seed(3345)
+controlRF <- trainControl(method="cv", number=2, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data=TrainSet, method="rf",
+                          trControl=controlRF)
+```
+```{r}
+modFitRandForest$finalModel
+```
+```{r}
+# prediction on Test dataset
+predictRandForest <- predict(modFitRandForest, newdata=TestSet)
+confMatRandForest <- confusionMatrix(predictRandForest, TestSet$classe)
+confMatRandForest
+```
+Apply Model to Testdata
+```{r}
+predictTEST <- predict(modFitRandForest, newdata=testing)
+predictTEST
+```
