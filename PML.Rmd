@@ -9,8 +9,7 @@ The document is the final report of the Peer Assessment project from Coursera's 
 The goal of the project is to predict the manner in which 6 participants performed some exercise as described below. This is the "classe" variable in the training set. The machine learning algorithm described here is applied to the 20 test cases available in the test data and the predictions are submitted in appropriate format to the Course Project Prediction Quiz for automated grading.
 
 Environment Preparation
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r (echo = TRUE)
 ```
 ```{r}
 library(knitr)
@@ -20,16 +19,17 @@ library(rpart.plot)
 library(rattle)
 library(randomForest)
 library(corrplot)
-set.seed(3345)
+library(nlme)
+set.seed(33245)
 ```
-Data download
+Data loading and Cleaning
 ```{r}
 UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
-
+#download the datasets
 training <- read.csv(url(UrlTrain))
 testing  <- read.csv(url(UrlTest))
-
+#create data partion
 inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
 TrainSet <- training[inTrain, ]
 TestSet  <- training[-inTrain, ]
@@ -52,25 +52,85 @@ TrainSet <- TrainSet[, -NZV]
 TestSet  <- TestSet[, -NZV]
 dim(TrainSet)
 ```
-Prediction Modelling
 ```{r}
-# model fit
-set.seed(3345)
-controlRF <- trainControl(method="cv", number=2, verboseIter=FALSE)
-modFitRandForest <- train(classe ~ ., data=TrainSet, method="rf",
-                          trControl=controlRF)
+TrainSet<-TrainSet[,-c(2,5)]
+TestSet<-TestSet[,-c(2,5)]
 ```
+Standardize by preProcessing 
 ```{r}
-modFitRandForest$finalModel
+preobj<-preProcess(TrainSet,method=c("center","scale"))
+TrainSetS<-predict(preobj,TrainSet)
+TestSetS<-predict(preobj,TestSet)
+```
+Correlation Analysis
+```{r}
+corMatrix<-cor(TrainSetS[,-57])
+corrplot(corMatrix,order="FPC",method="color",type = "lower",tl.cex=0.8, tl.col = rgb(0,0,0))
+```
+Prediction Modelling
+Three methods(models) will be trained using the TrainSets, the one with highest accuracy when applied to the TestSets will be used for the quiz predictions. The methods are: Random Forests, Decision Tree and Generalized Boosted Model, as described below.
+A Confusion Matrix is plotted at the end of each analysis to better visualize the accuracy of the models.
+```{r}
+# Random Forest model fit
+set.seed(33245)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRF <- train(classe ~ ., data=TrainSetS, method="rf",trControl=controlRF)
+modFitRF$finalModel                          
 ```
 ```{r}
 # prediction on Test dataset
-predictRandForest <- predict(modFitRandForest, newdata=TestSet)
-confMatRandForest <- confusionMatrix(predictRandForest, TestSet$classe)
-confMatRandForest
+predictRF <- predict(modFitRF, newdata=TestSetS)
+confMatRF <- confusionMatrix(predictRF, TestSetS$classe)
+confMatRF
 ```
-Apply Model to Testdata
 ```{r}
-predictTEST <- predict(modFitRandForest, newdata=testing)
+#plot matrix results
+plot(confMatRF$table, col = confMatRF$byClass, 
+     main = paste("Random Forest - Accuracy =",round(confMatRF$overall['Accuracy'], 4)))
+```
+```{r}
+#Decision Trees Model Fit
+set.seed(33245)
+modFitDT<-rpart(classe~.,data=TrainSetS,method="class")
+fancyRpartPlot(modFitDT)
+```
+```{r}
+#Apply Model to Testdata
+predictDT <- predict(modFitDT, newdata=TestSetS, type="class")
+confMatDT<-confusionMatrix(predictDT,TestSetS$classe)
+confMatDT
+```
+```{r}
+#plot matrix results
+plot(confMatDT$table, col = confMatDT$byClass, 
+     main = paste("Decision Tree - Accuracy =",
+                  round(confMatDT$overall['Accuracy'], 4)))
+```
+```{r}
+# Generalized Boosted Model Fit
+set.seed(33245)
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modFitGBM  <- train(classe ~ ., data=TrainSetS, method = "gbm",trControl = controlGBM, verbose = FALSE)
+modFitGBM$finalModel
+```
+```{r}
+#prediction on Test dataset
+predictGBM <- predict(modFitGBM, newdata=TestSetS)
+confMatGBM <- confusionMatrix(predictGBM, TestSetS$classe)
+confMatGBM
+```
+```{r}
+#plot matrix results
+plot(confMatGBM$table, col = confMatGBM$byClass, 
+     main = paste("GBM - Accuracy =", round(confMatGBM$overall['Accuracy'], 4)))
+```
+Applying the selected Model to the Test Data
+Accuracy of the 3 models are:
+Random Forest=0.9998
+Decision Tree=0.9998
+GBM=0.9998
+In this case, since all 3 models have thesame accuracy, any one of them can be selected. GBM is selected 
+```{r}
+predictTEST <- predict(modFitGBM, newdata=testing)
 predictTEST
 ```
